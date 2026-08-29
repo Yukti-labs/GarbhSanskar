@@ -5,6 +5,7 @@ import {
 } from "react-native";
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS, TRIMESTER_INFO } from "../constants/theme";
 import { SectionCard, PillBadge } from "../components/UIComponents";
+import { buildWeeklyRecap } from "../utils/careData";
 
 const WEEK_SIZES = {
   1: { label: "खसखस", emoji: "🌱", color: "#F6E1BC" },
@@ -53,16 +54,18 @@ const QUICK_CARDS = [
   { id: "baby", emoji: "🍼", label: "बाळाची वाढ", color: "#FFE6DE", border: "#D85F3A", text: "#A63F22", iconBg: "#FFD3C6" },
   { id: "talk", emoji: "💬", label: "बाळाशी बोला", color: "#DDF8F3", border: "#169D8C", text: "#0D6F63", iconBg: "#C5F1E9" },
   { id: "chatbot", emoji: "🤰", label: "सल्ला चॅट", color: "#EEE8FF", border: "#5B4BDB", text: "#4334B3", iconBg: "#DDD2FF" },
+  { id: "healthLog", emoji: "📒", label: "आरोग्य नोंद", color: "#E8FFF4", border: "#1B8A5A", text: "#0F6A43", iconBg: "#CFF5E3" },
+  { id: "ritual", emoji: "🔔", label: "दैनिक विधी", color: "#FFF6D8", border: "#C48912", text: "#8A5B08", iconBg: "#FFE9A8" },
   { id: "yoga", emoji: "🧘", label: "योग", color: "#F1E9FF", border: "#7B4FD6", text: "#6037B7", iconBg: "#E1D4FF" },
   { id: "nutrition", emoji: "🥗", label: "पोषण", color: "#E4F7E8", border: "#2C9A57", text: "#1E7841", iconBg: "#CFEFD8" },
   { id: "garbhsanskar", emoji: "🕉️", label: "गर्भसंस्कार", color: "#FFF2D8", border: "#D1952A", text: "#A66D08", iconBg: "#FFE6B0" },
   { id: "games", emoji: "🎯", label: "खेळ", color: "#E5EEFF", border: "#3F6FD8", text: "#2D56B8", iconBg: "#D1DEFF" },
+  { id: "family", emoji: "🤝", label: "कुटुंब", color: "#FFEFE8", border: "#C45C32", text: "#9A3D1C", iconBg: "#FFD8C8" },
   { id: "stories", emoji: "📖", label: "गर्भकथा", color: "#FFF1E4", border: "#BE7A2B", text: "#8F5716", iconBg: "#FFE0BF" },
-  { id: "garbhgeeta", emoji: "📜", label: "गर्भगीता", color: "#E9F1FF", border: "#4A6EC7", text: "#2F4E9E", iconBg: "#D8E6FF" },
   { id: "names", emoji: "👶", label: "नाव सुचवणी", color: "#FFE6F1", border: "#D9488C", text: "#B93373", iconBg: "#FFD1E7" },
 ];
 
-export default function HomeScreen({ profile, onNavigate, onGoToTab, colors = COLORS, isMobileWeb = false, dailyGeetaShlok = null }) {
+export default function HomeScreen({ profile, careData, onNavigate, onGoToTab, colors = COLORS, isMobileWeb = false, dailyGeetaShlok = null }) {
   const isWeb = Platform.OS === "web" && !isMobileWeb;
   const currentWeek = profile?.currentWeek || 1;
   const sizeInfo = WEEK_SIZES[currentWeek] || { label: "वाटाणे", emoji: "🌿", color: colors.bgWarm };
@@ -71,6 +74,7 @@ export default function HomeScreen({ profile, onNavigate, onGoToTab, colors = CO
   const daysLeft = profile?.dueDate
     ? Math.max(0, Math.ceil((new Date(profile.dueDate) - new Date()) / (1000 * 60 * 60 * 24)))
     : null;
+  const recap = buildWeeklyRecap(profile, careData);
 
   return (
     <ScrollView
@@ -128,8 +132,8 @@ export default function HomeScreen({ profile, onNavigate, onGoToTab, colors = CO
                     onGoToTab?.("names");
                     return;
                   }
-                  if (card.id === "chatbot") {
-                    onNavigate("chatbot");
+                  if (card.id === "chatbot" || card.id === "healthLog" || card.id === "ritual" || card.id === "family") {
+                    onNavigate(card.id);
                     return;
                   }
                   onNavigate("weekDetail", { week: currentWeek, tab: card.id });
@@ -145,6 +149,17 @@ export default function HomeScreen({ profile, onNavigate, onGoToTab, colors = CO
         </View>
 
         <View style={styles.rightCol}>
+          <SectionCard style={styles.trimesterCard}>
+            <View style={styles.sectionHeadRowNoAction}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>या आठवड्याचा आढावा</Text>
+            </View>
+            <Text style={[styles.recapText, { color: colors.textSecondary }]}>{recap.moodSummary}</Text>
+            <Text style={[styles.recapText, { color: recap.restFlag ? colors.error : colors.textSecondary }]}>{recap.advice}</Text>
+            <TouchableOpacity onPress={() => onNavigate("healthLog")}>
+              <Text style={[styles.sectionAction, { color: colors.primary }]}>नोंदवही उघडा →</Text>
+            </TouchableOpacity>
+          </SectionCard>
+
           <SectionCard style={styles.trimesterCard}>
             <View style={styles.sectionHeadRowNoAction}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>तिमाही टाइमलाइन</Text>
@@ -290,6 +305,7 @@ const styles = StyleSheet.create({
   quickCardEmoji: { fontSize: 24 },
   quickCardLabel: { fontSize: FONTS.small, lineHeight: 18, fontWeight: "700" },
 
+  recapText: { fontSize: FONTS.small, lineHeight: 20, marginBottom: SPACING.sm },
   trimesterCard: { marginTop: SPACING.xs },
   trimesterRow: {
     flexDirection: "row",

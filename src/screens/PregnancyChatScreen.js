@@ -6,6 +6,10 @@ import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from "../constants/theme";
 import { SectionCard, Chip, LoadingCard } from "../components/UIComponents";
 import { PREGNANCY_CHAT_CATEGORIES, getQuestionsForCategory } from "../constants/pregnancyChat";
 import { fetchPregnancyChatReply } from "../services/claudeApi";
+import {
+  canSendChat, bumpChatUsage, buildWeeklyRecap, isPlusUnlocked, FREE_CHAT_DAILY_LIMIT,
+} from "../utils/careData";
+import PlusGate from "../components/PlusGate";
 
 function buildInitialAssistantMessage(profile) {
   const week = profile?.currentWeek || 1;
@@ -23,19 +27,36 @@ function buildInitialAssistantMessage(profile) {
   };
 }
 
-export default function PregnancyChatScreen({ profile, colors = COLORS, isMobileWeb = false }) {
+export default function PregnancyChatScreen({
+  profile,
+  careData,
+  onSaveCareData,
+  onUnlockPlus,
+  colors = COLORS,
+  isMobileWeb = false,
+}) {
   const [selectedCategory, setSelectedCategory] = useState(PREGNANCY_CHAT_CATEGORIES[0].id);
-  const [messages, setMessages] = useState([buildInitialAssistantMessage(profile)]);
+  const restored = Array.isArray(careData?.chatMessages) && careData.chatMessages.length
+    ? careData.chatMessages
+    : [buildInitialAssistantMessage(profile)];
+  const [messages, setMessages] = useState(restored);
   const [customQuestion, setCustomQuestion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const scrollViewRef = useRef(null);
   const currentWeek = profile?.currentWeek || 1;
   const trimester = currentWeek <= 13 ? "पहिली तिमाही" : currentWeek <= 27 ? "दुसरी तिमाही" : "तिसरी तिमाही";
-  const presetQuestions = useMemo(
-    () => getQuestionsForCategory(selectedCategory, currentWeek),
-    [selectedCategory, currentWeek]
-  );
+  const recap = useMemo(() => buildWeeklyRecap(profile, careData), [profile, careData]);
+  const chatGate = canSendChat(profile, careData);
+
+  async function persistMessages(nextMessages, extra = {}) {
+    if (!onSaveCareData) return;
+    onSaveCareData({
+      ...careData,
+      chatMessages: nextMessages.slice(-40),
+      ...extra,
+    });
+  }
 
   // Auto-scroll to bottom whenever a new message is added or loading starts
   useEffect(() => {
@@ -45,9 +66,31 @@ export default function PregnancyChatScreen({ profile, colors = COLORS, isMobile
     return () => clearTimeout(timer);
   }, [messages.length, isLoading]);
 
+  const presetQuestions = useMemo(
+    () => getQuestionsForCategory(selectedCategory, currentWeek),
+    [selectedCategory, currentWeek]
+  );
+
   async function askQuestion(question, category = selectedCategory) {
     const trimmed = String(question || "").trim();
     if (!trimmed || isLoading) return;
+
+    const gate = canSendChat(profile, careData);
+    if (!gate.ok) {
+      const blocked = {
+        id: `assistant_limit_${Date.now()}`,
+        role: "assistant",
+        question: trimmed,
+        answer: `आजचे ${FREE_CHAT_DAILY_LIMIT} फ्री प्रश्न संपले. उद्या पुन्हा विचारा किंवा Plus डेमो सुरू करा.`,
+        tips: ["नोंदवहीत लक्षणे लिहा", "गंभीर त्रास असल्यास डॉक्टर"],
+        doctorFlags: ["तीव्र वेदना, रक्तस्राव, हालचाल कमी"],
+        disclaimer: "ही माहिती वैद्यकीय उपचारांचा पर्याय नाही.",
+      };
+      const next = [...messages, { id: `user_${Date.now()}`, role: "user", question: trimmed, answer: "", tips: [], doctorFlags: [], disclaimer: "" }, blocked];
+      setMessages(next);
+      persistMessages(next);
+      return;
+    }
 
     const history = messages.flatMap((item) => {
       const list = [];
@@ -57,47 +100,55 @@ export default function PregnancyChatScreen({ profile, colors = COLORS, isMobile
     });
 
     const userId = `user_${Date.now()}`;
-    setMessages((prev) => [
-      ...prev,
+    const nextMessages = [
+      ...messages,
       { id: userId, role: "user", question: trimmed, answer: "", tips: [], doctorFlags: [], disclaimer: "" },
-    ]);
-    setCustomQuestion("");
-    setIsLoading(true);
+    ];
+      setMessages(nextMessages);
+      setCustomQuestion("");
+      setIsLoading(true);
 
-    try {
-      const reply = await fetchPregnancyChatReply({
-        profile,
-        question: trimmed,
-        category,
-        history,
-      });
+      const usage = bumpChatUsage(careData);
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `assistant_${Date.now()}`,
-          role: "assistant",
+      try {
+        const reply = await fetchPregnancyChatReply({
+          profile,
+          careData,
           question: trimmed,
-          answer: reply?.answer || "क्षमस्व, सध्या उत्तर देता आले नाही.",
-          tips: Array.isArray(reply?.tips) ? reply.tips : [],
-          doctorFlags: Array.isArray(reply?.doctorFlags) ? reply.doctorFlags : [],
-          disclaimer: reply?.disclaimer || "वैद्यकीय प्रश्नांसाठी डॉक्टरांचा सल्ला घ्या.",
-        },
-      ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `assistant_error_${Date.now()}`,
-          role: "assistant",
-          question: trimmed,
-          answer: "क्षमस्व, सध्या उत्तर मिळाले नाही. कृपया थोड्या वेळाने पुन्हा प्रयत्न करा.",
-          tips: ["नेटवर्क तपासा", "थोड्या वेळाने पुन्हा विचारा"],
-          doctorFlags: ["गंभीर त्रास असल्यास डॉक्टरांशी त्वरित संपर्क करा"],
-          disclaimer: "ही माहिती वैद्यकीय उपचारांचा पर्याय नाही.",
-        },
-      ]);
-    } finally {
+          category,
+          history,
+        });
+
+        const withReply = [
+          ...nextMessages,
+          {
+            id: `assistant_${Date.now()}`,
+            role: "assistant",
+            question: trimmed,
+            answer: reply?.answer || "क्षमस्व, सध्या उत्तर देता आले नाही.",
+            tips: Array.isArray(reply?.tips) ? reply.tips : [],
+            doctorFlags: Array.isArray(reply?.doctorFlags) ? reply.doctorFlags : [],
+            disclaimer: reply?.disclaimer || "वैद्यकीय प्रश्नांसाठी डॉक्टरांचा सल्ला घ्या.",
+          },
+        ];
+        setMessages(withReply);
+        persistMessages(withReply, { chatUsage: usage });
+      } catch {
+        const withError = [
+          ...nextMessages,
+          {
+            id: `assistant_error_${Date.now()}`,
+            role: "assistant",
+            question: trimmed,
+            answer: "क्षमस्व, सध्या उत्तर मिळाले नाही. कृपया थोड्या वेळाने पुन्हा प्रयत्न करा.",
+            tips: ["नेटवर्क तपासा", "थोड्या वेळाने पुन्हा विचारा"],
+            doctorFlags: ["गंभीर त्रास असल्यास डॉक्टरांशी त्वरित संपर्क करा"],
+            disclaimer: "ही माहिती वैद्यकीय उपचारांचा पर्याय नाही.",
+          },
+        ];
+        setMessages(withError);
+        persistMessages(withError, { chatUsage: usage });
+      } finally {
       setIsLoading(false);
     }
   }
@@ -113,7 +164,19 @@ export default function PregnancyChatScreen({ profile, colors = COLORS, isMobile
         <Text style={[styles.heroEyebrow, { color: colors.primaryDark }]}>💬 सुरक्षित मराठी सहाय्य</Text>
         <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>गर्भसंस्कार सल्ला चॅट</Text>
         <Text style={[styles.heroSub, { color: colors.textSecondary }]}>आठवडा {currentWeek} • {trimester}</Text>
-        <Text style={[styles.heroNote, { color: colors.textSecondary }]}>तयार प्रश्न निवडा आणि तुमच्या आठवड्यानुसार मार्गदर्शन मिळवा.</Text>
+        <Text style={[styles.heroNote, { color: colors.textSecondary }]}>
+          {recap.moodSummary} {isPlusUnlocked(profile) ? "Plus चॅट अमर्याद." : `आज ${chatGate.remaining} फ्री प्रश्न शिल्लक.`}
+        </Text>
+        <Text style={[styles.heroNote, { color: recap.restFlag ? colors.error : colors.textSecondary }]}>{recap.advice}</Text>
+        {!chatGate.ok && (
+          <PlusGate
+            unlocked={false}
+            colors={colors}
+            title="आजची फ्री चॅट संपली"
+            body="Plus डेमोने अमर्याद प्रश्न. डोस/निदान अजूनही दिले जाणार नाही."
+            onUnlock={onUnlockPlus}
+          />
+        )}
       </SectionCard>
 
       <SectionCard>

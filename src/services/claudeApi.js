@@ -1250,10 +1250,14 @@ export async function fetchGarbhGeeta(week) {
   };
 }
 
-export async function fetchPregnancyChatReply({ profile, question, category = "general", history = [] }) {
+export async function fetchPregnancyChatReply({ profile, careData, question, category = "general", history = [] }) {
   const week = profile?.currentWeek || 1;
   const motherName = profile?.name || "आई";
   const trimester = week <= 13 ? "पहिली तिमाही" : week <= 27 ? "दुसरी तिमाही" : "तिसरी तिमाही";
+  const diet = profile?.diet || "veg";
+  const flags = Array.isArray(profile?.healthFlags) ? profile.healthFlags.join(", ") : "नाही";
+  const ptype = profile?.pregnancyType || "singleton";
+  const recapMoods = (careData?.moodLogs || []).slice(0, 5).map((item) => item.mood).join(", ");
   const historyText = history
     .slice(-6)
     .map((item) => `${item.role === "user" ? "प्रश्न" : "उत्तर"}: ${item.text}`)
@@ -1278,8 +1282,10 @@ export async function fetchPregnancyChatReply({ profile, question, category = "g
 नियम:
 - फक्त मराठीत उत्तर द्या.
 - प्रश्न गर्भावस्था, प्रसूती तयारी, पोषण, योग, मानसिक आरोग्य, सुरक्षितता यापुरते ठेवा.
-- वैद्यकीय निदान करू नका.
+- वैद्यकीय निदान करू नका. औषधाचा डोस, इंजेक्शन, किंवा उपचार योजना देऊ नका.
+- स्कॅन/रिपोर्ट अर्थ लावू नका; फक्त सामान्य समज आणि डॉक्टरकडे नेण्याची विनंती.
 - गंभीर किंवा रेड-फ्लॅग लक्षणांसाठी डॉक्टर/रुग्णालयाचा सल्ला द्या.
+- आहार सुचवताना आईच्या आहार प्रकाराचा (शाकाहारी/जैन इ.) आदर करा.
 - उत्तर आश्वासक, संक्षिप्त, आणि कृतीयोग्य असावे.
 - कोणतीही AI, model, provider, API यांचा उल्लेख करू नका.
 IMPORTANT: Respond ONLY with valid JSON.`;
@@ -1287,6 +1293,11 @@ IMPORTANT: Respond ONLY with valid JSON.`;
   const prompt = `आईचे नाव: ${motherName}
 सध्याचा आठवडा: ${week}
 तिमाही: ${trimester}
+आहार: ${diet}
+गर्भधारणा प्रकार: ${ptype}
+जोखीम झेंडे: ${flags || "नाही"}
+शहर: ${profile?.city || "नाही"}
+अलीकडील भावना: ${recapMoods || "नाही"}
 विषय: ${category}
 
 चालू प्रश्न: ${question}

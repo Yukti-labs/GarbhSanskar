@@ -6,6 +6,7 @@ import {
 import AppDatePicker from "../components/AppDatePicker";
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS, TRIMESTER_INFO } from "../constants/theme";
 import { SectionCard, InfoRow } from "../components/UIComponents";
+import { DIET_OPTIONS, PREGNANCY_TYPES, HEALTH_FLAGS, dietLabel, pregnancyTypeLabel, isPlusUnlocked } from "../utils/careData";
 
 export default function ProfileScreen({ profile, onUpdateProfile, savedNames, colors = COLORS, onSignOut }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -89,6 +90,16 @@ export default function ProfileScreen({ profile, onUpdateProfile, savedNames, co
           label="बाळाचे लिंग"
           value={profile?.babyGender === "boy" ? "मुलगा 👦" : profile?.babyGender === "girl" ? "मुलगी 👧" : "अज्ञात 🤫"}
         />
+        <InfoRow icon="🥗" label="आहार" value={dietLabel(profile?.diet)} />
+        <InfoRow icon="👶" label="गर्भधारणा" value={pregnancyTypeLabel(profile?.pregnancyType)} />
+        <InfoRow icon="📍" label="शहर" value={profile?.city || "—"} />
+        <InfoRow
+          icon="🚩"
+          label="जोखीम नोंद"
+          value={(profile?.healthFlags || []).length
+            ? HEALTH_FLAGS.filter((item) => (profile.healthFlags || []).includes(item.id)).map((item) => item.label).join(", ")
+            : "नाही"}
+        />
         <TouchableOpacity
           style={[styles.updateBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]}
           onPress={() => setShowDatePicker(true)}
@@ -106,6 +117,68 @@ export default function ProfileScreen({ profile, onUpdateProfile, savedNames, co
           onCancel={() => setShowDatePicker(false)}
         />
       )}
+
+      <SectionCard style={styles.infoCard}>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>🥗 आहार आणि जोखीम</Text>
+        <Text style={[styles.appInfo, { color: colors.textSecondary }]}>चॅट आणि पोषण या निवडी वापरते. डोस किंवा निदान कधीच बदलत नाही.</Text>
+        <View style={styles.chipRow}>
+          {DIET_OPTIONS.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.miniChip, { backgroundColor: profile?.diet === item.id ? colors.primary : colors.bgWarm }]}
+              onPress={() => onUpdateProfile({ ...profile, diet: item.id })}
+            >
+              <Text style={[styles.miniChipText, { color: profile?.diet === item.id ? colors.textWhite : colors.textSecondary }]}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={styles.chipRow}>
+          {PREGNANCY_TYPES.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.miniChip, { backgroundColor: profile?.pregnancyType === item.id ? colors.accent : colors.bgTeal }]}
+              onPress={() => onUpdateProfile({ ...profile, pregnancyType: item.id })}
+            >
+              <Text style={[styles.miniChipText, { color: profile?.pregnancyType === item.id ? colors.textWhite : colors.accent }]}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={styles.chipRow}>
+          {HEALTH_FLAGS.map((item) => {
+            const on = (profile?.healthFlags || []).includes(item.id);
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.miniChip, { backgroundColor: on ? colors.gold : colors.bgMuted }]}
+                onPress={() => {
+                  const current = profile?.healthFlags || [];
+                  const next = on ? current.filter((id) => id !== item.id) : [...current, item.id];
+                  onUpdateProfile({ ...profile, healthFlags: next });
+                }}
+              >
+                <Text style={[styles.miniChipText, { color: on ? colors.textWhite : colors.textSecondary }]}>{item.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </SectionCard>
+
+      <SectionCard style={styles.infoCard}>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>✦ गर्भसंस्कार Plus</Text>
+        <Text style={[styles.appInfo, { color: colors.textSecondary }]}>
+          {isPlusUnlocked(profile)
+            ? "Plus डेमो सुरू आहे: आकडी टाइमर, डॉक्टर अहवाल, संस्कार ग्रंथालय, कुटुंब कोड, अमर्याद चॅट."
+            : "फ्री: नोंदवही, ५ चॅट/दिवस, आजचा विधी. Plus मध्ये पूर्ण ग्रंथालय आणि अहवाल."}
+        </Text>
+        {!isPlusUnlocked(profile) && (
+          <TouchableOpacity
+            style={[styles.updateBtn, { backgroundColor: colors.primary }]}
+            onPress={() => onUpdateProfile({ ...profile, plusUnlocked: true })}
+          >
+            <Text style={styles.updateBtnText}>Plus डेमो अनलॉक</Text>
+          </TouchableOpacity>
+        )}
+      </SectionCard>
 
       {/* Trimester Guide */}
       <SectionCard style={styles.infoCard}>
@@ -242,4 +315,7 @@ const styles = StyleSheet.create({
     fontSize: FONTS.small,
     fontWeight: "800",
   },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
+  miniChip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+  miniChipText: { fontSize: FONTS.small, fontWeight: "700" },
 });

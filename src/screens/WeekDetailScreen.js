@@ -9,6 +9,8 @@ import {
   PillBadge, TabBar, ErrorState,
 } from "../components/UIComponents";
 import { getPregnancyGamesForWeek } from "../constants/pregnancyGames";
+import SessionTimer from "../components/SessionTimer";
+import { dietLabel } from "../utils/careData";
 import {
   fetchBabyDevelopment, fetchTalkToBaby,
   fetchYoga, fetchNutrition, fetchGarbhSanskar, fetchGarbhKatha, fetchGarbhGeeta,
@@ -25,7 +27,7 @@ const TABS = [
   { id: "garbhsanskar", emoji: "🕉️", label: "संस्कार" },
 ];
 
-export default function WeekDetailScreen({ week, initialTab = "baby", colors = COLORS, isDarkMode = false, isMobileWeb = false }) {
+export default function WeekDetailScreen({ week, initialTab = "baby", profile, colors = COLORS, isDarkMode = false, isMobileWeb = false }) {
   const isWeb = Platform.OS === "web" && !isMobileWeb;
   const [activeTab, setActiveTab] = useState(initialTab);
   const [data, setData] = useState({});
@@ -106,7 +108,7 @@ export default function WeekDetailScreen({ week, initialTab = "baby", colors = C
             {activeTab === "baby" && <BabyTab data={tabData} tri={tri} colors={colors} />}
             {activeTab === "talk" && <TalkTab data={tabData} tri={tri} colors={colors} isDarkMode={isDarkMode} />}
             {activeTab === "yoga" && <YogaTab data={tabData} tri={tri} colors={colors} isDarkMode={isDarkMode} />}
-            {activeTab === "nutrition" && <NutritionTab data={tabData} tri={tri} colors={colors} isDarkMode={isDarkMode} />}
+            {activeTab === "nutrition" && <NutritionTab data={tabData} tri={tri} colors={colors} isDarkMode={isDarkMode} diet={profile?.diet} />}
             {activeTab === "games" && <GamesTab data={tabData} tri={tri} colors={colors} isDarkMode={isDarkMode} />}
             {activeTab === "stories" && <StoriesTab data={tabData} tri={tri} colors={colors} isDarkMode={isDarkMode} />}
             {activeTab === "garbhgeeta" && <GarbhGeetaTab data={tabData} tri={tri} colors={colors} isDarkMode={isDarkMode} />}
@@ -233,6 +235,7 @@ function YogaTab({ data, tri, colors, isDarkMode }) {
           </View>
           <Text style={[styles.poseBenefit, { color: darkTextColor }]}>✅ {pose.benefit}</Text>
           <Text style={[styles.poseSteps, { color: isDarkMode ? "#FFFFFF" : colors.textSecondary }]}>{pose.steps}</Text>
+          <SessionTimer label={pose.name} durationText={pose.duration} colors={colors} />
         </SectionCard>
       ))}
       {data.pranayama && (
@@ -248,7 +251,7 @@ function YogaTab({ data, tri, colors, isDarkMode }) {
 }
 
 // ─── Nutrition Tab ────────────────────────────────────────────────────
-function NutritionTab({ data, tri, colors, isDarkMode }) {
+function NutritionTab({ data, tri, colors, isDarkMode, diet }) {
   const darkSectionStyle = isDarkMode ? { backgroundColor: "#000000", borderColor: "#000000" } : null;
   const darkTextColor = isDarkMode ? "#FFFFFF" : colors.textPrimary;
   return (
@@ -257,6 +260,9 @@ function NutritionTab({ data, tri, colors, isDarkMode }) {
       <SectionCard style={isDarkMode ? darkSectionStyle : { backgroundColor: "#E8F5E9" }}>
         <Text style={[styles.cardTitle, { color: darkTextColor }]}>⭐ या आठवड्याचे मुख्य पोषण</Text>
         <Text style={[styles.nutrientText, { color: darkTextColor }]}>{data.keyNutrient}</Text>
+        {!!diet && (
+          <Text style={[styles.safetyText, { color: darkTextColor }]}>तुमचा आहार: {dietLabel(diet)}. रेसिपी याला जुळवा; मांसाहारी सूचना शाकाहारींसाठी वगळा.</Text>
+        )}
       </SectionCard>
 
       <SectionCard style={darkSectionStyle}>
@@ -330,6 +336,7 @@ function GamesTab({ data, tri, colors, isDarkMode }) {
             <PillBadge label={game.duration} color="#EEF4FF" textColor="#3F6FB5" />
           </View>
           <Text style={[styles.gameHowTo, { color: isDarkMode ? "#FFFFFF" : colors.textSecondary }]}>{game.howToPlay}</Text>
+          <SessionTimer label={game.name} durationText={game.duration} colors={colors} />
         </SectionCard>
       ))}
 

@@ -5,12 +5,18 @@ import {
 } from "react-native";
 import AppDatePicker from "../components/AppDatePicker";
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from "../constants/theme";
+import { DIET_OPTIONS, PREGNANCY_TYPES, HEALTH_FLAGS } from "../utils/careData";
 
 export default function OnboardingScreen({ onComplete }) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [lmpDate, setLmpDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [diet, setDiet] = useState("veg");
+  const [pregnancyType, setPregnancyType] = useState("singleton");
+  const [healthFlags, setHealthFlags] = useState([]);
+  const [viewerRole, setViewerRole] = useState("mother");
+  const [city, setCity] = useState("");
 
   function calcDueDate(lmp) {
     const due = new Date(lmp);
@@ -36,6 +42,12 @@ export default function OnboardingScreen({ onComplete }) {
       dueDate: dueDate.toISOString(),
       currentWeek,
       babyGender: "unknown",
+      diet,
+      pregnancyType,
+      healthFlags,
+      viewerRole,
+      city: city.trim(),
+      plusUnlocked: false,
     });
   }
 
@@ -47,6 +59,7 @@ export default function OnboardingScreen({ onComplete }) {
     { emoji: "✨", title: "स्वागत", subtitle: "तुमचा मातृत्व प्रवास इथेपासून" },
     { emoji: "👩", title: "प्रोफाइल", subtitle: "तुमचे नाव नोंदवा" },
     { emoji: "📅", title: "टाइमलाइन", subtitle: "LMP आणि अपेक्षित तारीख" },
+    { emoji: "🩺", title: "काळजी", subtitle: "आहार आणि जोखीम (पर्यायी)" },
   ];
 
   const steps = [
@@ -156,6 +169,79 @@ export default function OnboardingScreen({ onComplete }) {
               <Text style={styles.infoTileLabel}>सध्याचा आठवडा</Text>
               <Text style={styles.infoTileValue}>{currentWeek}वा</Text>
             </View>
+          </View>
+        </View>
+      ),
+    },
+    {
+      emoji: "🩺",
+      title: "वैयक्तिक काळजी",
+      subtitle: "AI आणि पोषण या माहितीनुसार अधिक सुरक्षित राहील. रिकामे ठेवता येते.",
+      content: (
+        <View style={styles.stepContent}>
+          <Text style={styles.inputLabel}>मी कोण आहे?</Text>
+          <View style={styles.chipRow}>
+            {[
+              { id: "mother", label: "आई" },
+              { id: "partner", label: "साथीदार" },
+            ].map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.choiceChip, viewerRole === item.id && styles.choiceChipOn]}
+                onPress={() => setViewerRole(item.id)}
+              >
+                <Text style={[styles.choiceChipText, viewerRole === item.id && styles.choiceChipTextOn]}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.inputLabel}>आहार</Text>
+          <View style={styles.chipRow}>
+            {DIET_OPTIONS.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.choiceChip, diet === item.id && styles.choiceChipOn]}
+                onPress={() => setDiet(item.id)}
+              >
+                <Text style={[styles.choiceChipText, diet === item.id && styles.choiceChipTextOn]}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.inputLabel}>गर्भधारणा</Text>
+          <View style={styles.chipRow}>
+            {PREGNANCY_TYPES.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.choiceChip, pregnancyType === item.id && styles.choiceChipOn]}
+                onPress={() => setPregnancyType(item.id)}
+              >
+                <Text style={[styles.choiceChipText, pregnancyType === item.id && styles.choiceChipTextOn]}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.inputLabel}>डॉक्टरांनी सांगितलेले (पर्यायी)</Text>
+          <View style={styles.chipRow}>
+            {HEALTH_FLAGS.map((item) => {
+              const on = healthFlags.includes(item.id);
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.choiceChip, on && styles.choiceChipOn]}
+                  onPress={() => setHealthFlags((prev) => (on ? prev.filter((id) => id !== item.id) : [...prev, item.id]))}
+                >
+                  <Text style={[styles.choiceChipText, on && styles.choiceChipTextOn]}>{item.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <View style={styles.inputCard}>
+            <Text style={styles.inputLabel}>शहर (पर्यायी)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="उदा. पुणे"
+              placeholderTextColor={COLORS.textLight}
+              value={city}
+              onChangeText={setCity}
+            />
           </View>
         </View>
       ),
@@ -442,6 +528,18 @@ const styles = StyleSheet.create({
   },
   tipEmoji: { fontSize: 20 },
   tipText: { flex: 1, fontSize: FONTS.small, lineHeight: 20, color: COLORS.textSecondary },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: SPACING.xs, marginBottom: SPACING.md },
+  choiceChip: {
+    borderRadius: RADIUS.full,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.bgWarm,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  choiceChipOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  choiceChipText: { fontSize: FONTS.small, fontWeight: "700", color: COLORS.textSecondary },
+  choiceChipTextOn: { color: COLORS.textWhite },
 
   navRow: {
     position: "absolute",
