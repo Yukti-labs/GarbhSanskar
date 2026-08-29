@@ -4,18 +4,19 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build:web",
   "outputDirectory": "dist",
+  "headers": [
+    {
+      "source": "/firebase-config.json",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" },
+        { "key": "Content-Type", "value": "application/json; charset=utf-8" }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/__/auth/(.*)",
       "destination": "https://garbhsanskar-aca16.firebaseapp.com/__/auth/$1"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
     }
   ]
 }

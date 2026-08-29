@@ -6,7 +6,14 @@ import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from "../constants/theme";
 
 WebBrowser.maybeCompleteAuthSession();
 
-export default function LoginScreen({ onGoogleSignIn, onDemoStart, colors = COLORS, errorText = "", isBusy = false }) {
+export default function LoginScreen({
+  onGoogleSignIn,
+  onDemoStart,
+  colors = COLORS,
+  errorText = "",
+  isBusy = false,
+  firebaseReady = true,
+}) {
   const isWeb = Platform.OS === "web";
 
   if (isWeb) {
@@ -17,6 +24,7 @@ export default function LoginScreen({ onGoogleSignIn, onDemoStart, colors = COLO
         colors={colors}
         errorText={errorText}
         isBusy={isBusy}
+        firebaseReady={firebaseReady}
       />
     );
   }
@@ -28,11 +36,12 @@ export default function LoginScreen({ onGoogleSignIn, onDemoStart, colors = COLO
       colors={colors}
       errorText={errorText}
       isBusy={isBusy}
+      firebaseReady={firebaseReady}
     />
   );
 }
 
-function WebLogin({ onGoogleSignIn, onDemoStart, colors, errorText, isBusy }) {
+function WebLogin({ onGoogleSignIn, onDemoStart, colors, errorText, isBusy, firebaseReady }) {
   const [localError, setLocalError] = useState("");
 
   async function handleLogin() {
@@ -53,10 +62,11 @@ function WebLogin({ onGoogleSignIn, onDemoStart, colors, errorText, isBusy }) {
     errorText,
     localError,
     showNativeNote: false,
+    firebaseReady,
   });
 }
 
-function NativeLogin({ onGoogleSignIn, onDemoStart, colors, errorText, isBusy }) {
+function NativeLogin({ onGoogleSignIn, onDemoStart, colors, errorText, isBusy, firebaseReady }) {
   const [localError, setLocalError] = useState("");
 
   const [request, response, promptAsync] = Google.useAuthRequest({
@@ -112,6 +122,7 @@ function NativeLogin({ onGoogleSignIn, onDemoStart, colors, errorText, isBusy })
     errorText,
     localError,
     showNativeNote: true,
+    firebaseReady,
   });
 }
 
@@ -124,20 +135,25 @@ function renderLoginCard({
   errorText,
   localError,
   showNativeNote,
+  firebaseReady = true,
 }) {
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <View style={[styles.card, { backgroundColor: colors.bgCard, borderColor: colors.borderLight }]}> 
         <Text style={styles.logo}>🕉️</Text>
         <Text style={[styles.title, { color: colors.textPrimary }]}>गर्भसंस्कार</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Google ने लॉगिन करा आणि तुमचा डेटा सर्व डिव्हाइसमध्ये सुरक्षित ठेवा.</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          {firebaseReady
+            ? "Google ने लॉगिन करा आणि तुमचा डेटा सर्व डिव्हाइसमध्ये सुरक्षित ठेवा."
+            : "Google लॉगिन साठी Firebase keys हव्यात. आत्ता डेमोने अॅप वापरू शकता."}
+        </Text>
 
         <TouchableOpacity
-          style={[styles.googleBtn, { backgroundColor: colors.primary }, isBusy && styles.googleBtnDisabled]}
+          style={[styles.googleBtn, { backgroundColor: colors.primary }, (isBusy || !firebaseReady) && styles.googleBtnDisabled]}
           onPress={onPress}
-          disabled={isBusy}
+          disabled={isBusy || !firebaseReady}
         >
-          <Text style={styles.googleBtnText}>{buttonLabel}</Text>
+          <Text style={styles.googleBtnText}>{firebaseReady ? buttonLabel : "Google (Firebase सेटअप बाकी)"}</Text>
         </TouchableOpacity>
 
         {!!onDemoStart && (
@@ -150,7 +166,13 @@ function renderLoginCard({
           </TouchableOpacity>
         )}
 
-        {showNativeNote && (
+        {!firebaseReady && (
+          <Text style={[styles.note, { color: colors.textSecondary }]}>
+            Google साइन-इन नंतर Firebase keys Vercel वर जोडल्या की सुरू होईल. आत्ता डेमोने पूर्ण अॅप वापरता येते.
+          </Text>
+        )}
+
+        {showNativeNote && firebaseReady && (
           <Text style={[styles.note, { color: colors.textSecondary }]}>टीप: iOS/Android साठी Google Client IDs आवश्यक आहेत.</Text>
         )}
 

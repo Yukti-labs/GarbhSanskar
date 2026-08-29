@@ -13,50 +13,95 @@ import {
 } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 
-const webAuthDomain = (Platform.OS === "web" && typeof window !== "undefined")
-  ? window.location.hostname
-  : process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN;
+const extra = Constants.expoConfig?.extra || {};
 
-const firebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-  authDomain: webAuthDomain,
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
-};
+function fromExtra() {
+  return {
+    apiKey: String(extra.firebaseApiKey || process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "").trim(),
+    authDomain: String(extra.firebaseAuthDomain || process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "").trim(),
+    projectId: String(extra.firebaseProjectId || process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "").trim(),
+    storageBucket: String(extra.firebaseStorageBucket || process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "").trim(),
+    messagingSenderId: String(extra.firebaseMessagingSenderId || process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "").trim(),
+    appId: String(extra.firebaseAppId || process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "").trim(),
+  };
+}
 
-const REQUIRED_FIREBASE_KEYS = [
-  "EXPO_PUBLIC_FIREBASE_API_KEY",
-  "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN",
-  "EXPO_PUBLIC_FIREBASE_PROJECT_ID",
-  "EXPO_PUBLIC_FIREBASE_APP_ID",
-];
+function isComplete(config) {
+  return !!(config?.apiKey && config?.authDomain && config?.projectId && config?.appId);
+}
 
-const hasConfig = !!(
-  firebaseConfig.apiKey
-  && firebaseConfig.authDomain
-  && firebaseConfig.projectId
-  && firebaseConfig.appId
-);
+function collectConfigUrls() {
+  const urls = [];
+  if (typeof window !== "undefined" && window.location?.origin) {
+    urls.push(`${window.location.origin}/firebase-config.json`);
+    urls.push(`${window.location.origin}/api/public-config`);
+  }
+  const base = (process.env.EXPO_PUBLIC_API_BASE_URL || "").replace(/\/$/, "");
+  if (base) {
+    urls.push(`${base}/firebase-config.json`);
+    urls.push(`${base}/api/public-config`);
+  }
+  return [...new Set(urls)];
+}
+
+async function fetchJsonConfig(url) {
+  const response = await fetch(url, { method: "GET", cache: "no-store" });
+  if (!response.ok) return {};
+  const text = await response.text();
+  const trimmed = String(text || "").trim();
+  if (!trimmed || trimmed.startsWith("<")) return {};
+  const data = JSON.parse(trimmed);
+  return data?.firebase && typeof data.firebase === "object" ? data.firebase : {};
+}
+
+async function fetchRuntimeFirebaseConfig() {
+  const urls = collectConfigUrls();
+  for (const url of urls) {
+    try {
+      const firebase = await fetchJsonConfig(url);
+      if (isComplete(firebase)) return firebase;
+    } catch (error) {
+      console.error("Firebase config fetch error", url, error);
+    }
+  }
+  return {};
+}
 
 let app;
 let auth;
 let db;
+let initPromise;
 
-if (hasConfig) {
-  app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
+export async function ensureFirebase() {
+  if (auth) return true;
+  if (!initPromise) {
+    initPromise = (async () => {
+      const merged = { ...fromExtra(), ...(await fetchRuntimeFirebaseConfig()) };
+      if (!isComplete(merged)) return false;
+      app = getApps().length ? getApp() : initializeApp(merged);
+      auth = getAuth(app);
+      db = getFirestore(app);
+      return true;
+    })();
+  }
+  return initPromise;
 }
 
 export function isFirebaseConfigured() {
-  return hasConfig;
+  return isComplete(fromExtra()) || !!auth;
 }
 
 export function getMissingFirebaseConfigKeys() {
-  return REQUIRED_FIREBASE_KEYS.filter((key) => !process.env[key]);
+  const config = fromExtra();
+  const mapping = {
+    EXPO_PUBLIC_FIREBASE_API_KEY: config.apiKey,
+    EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: config.authDomain,
+    EXPO_PUBLIC_FIREBASE_PROJECT_ID: config.projectId,
+    EXPO_PUBLIC_FIREBASE_APP_ID: config.appId,
+  };
+  return Object.keys(mapping).filter((key) => !mapping[key]);
 }
 
 export function observeAuth(handler) {
@@ -68,7 +113,8 @@ export function observeAuth(handler) {
 }
 
 export async function tryCompleteRedirectSignIn() {
-  if (!auth || Platform.OS !== "web") return null;
+  const ready = await ensureFirebase();
+  if (!ready || !auth || Platform.OS !== "web") return null;
   try {
     return await getRedirectResult(auth);
   } catch (error) {
@@ -132,7 +178,8 @@ function isIOSSafari() {
 }
 
 export async function signInWithGoogle(nativeGoogleTokens = null) {
-  if (!auth) throw new Error("Firebase config missing");
+  const ready = await ensureFirebase();
+  if (!ready || !auth) throw new Error("Firebase config missing");
 
   if (Platform.OS !== "web") {
     const idToken = nativeGoogleTokens?.idToken;
@@ -176,6 +223,7 @@ export async function signInWithGoogle(nativeGoogleTokens = null) {
 }
 
 export async function signOutUser() {
+  await ensureFirebase();
   if (!auth) return;
   await signOut(auth);
 }
@@ -185,14 +233,16 @@ function getUserDocRef(uid) {
 }
 
 export async function loadUserCloud(uid) {
-  if (!db || !uid) return null;
+  const ready = await ensureFirebase();
+  if (!ready || !db || !uid) return null;
   const snapshot = await getDoc(getUserDocRef(uid));
   if (!snapshot.exists()) return null;
   return snapshot.data();
 }
 
 export async function saveUserCloud(uid, payload) {
-  if (!db || !uid) return;
+  const ready = await ensureFirebase();
+  if (!ready || !db || !uid) return;
   await setDoc(
     getUserDocRef(uid),
     {

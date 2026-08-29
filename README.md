@@ -40,17 +40,21 @@ EXPO_PUBLIC_API_BASE_URL=https://your-app.vercel.app
 GEMINI_API_KEY=your_gemini_api_key_here
 OPENAI_API_KEY=your_openai_api_key_here
 GROK_API_KEY=your_grok_api_key_here
-EXPO_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
-EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+EXPO_PUBLIC_FIREBASE_API_KEY=your_firebase_web_api_key
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=garbhsanskar-aca16.firebaseapp.com
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=garbhsanskar-aca16
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=garbhsanskar-aca16.appspot.com
 EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 EXPO_PUBLIC_FIREBASE_APP_ID=your_firebase_app_id
 ```
 
-AI provider keys are read by the backend API endpoint (`/api/content`), not by the mobile/web client.
+Copy the **apiKey**, **appId**, and **messagingSenderId** from Firebase Console → Project settings → Your apps (Web).
 
-The backend uses Gemini first and automatically falls back to OpenAI/Grok on supported failures.
+Expo web **does not read Vercel env at click-time** unless they were present during `expo export`, or the app loads `/api/public-config` (this project now does that on login). Name the variables `EXPO_PUBLIC_FIREBASE_*` **or** `FIREBASE_API_KEY` / `FIREBASE_APP_ID` / `FIREBASE_PROJECT_ID` / `FIREBASE_AUTH_DOMAIN`. Then **Redeploy**.
+
+On Vercel: Project → Settings → Environment Variables for Production, Preview, and Development, then **Redeploy**.
+
+After deploy, open `https://your-app.vercel.app/firebase-config.json` — you should see JSON with `"configured": true`. If you open `/api/public-config` and get the login page instead of JSON, a catch-all rewrite is sending API URLs to the SPA (fixed in vercel.json).
 
 Google login and cross-device user data sync use Firebase Auth + Firestore.
 

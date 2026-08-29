@@ -25,7 +25,7 @@ import { getDailyGeetaShlok } from "./src/services/claudeApi";
 import { getDefaultCareData, mergeCareData } from "./src/utils/careData";
 import {
   isFirebaseConfigured,
-  getMissingFirebaseConfigKeys,
+  ensureFirebase,
   observeAuth,
   signInWithGoogle,
   loadUserCloud,
@@ -123,6 +123,7 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [needsReOnboarding, setNeedsReOnboarding] = useState(false);
   const [loginScreenKey, setLoginScreenKey] = useState(0);
+  const [firebaseReady, setFirebaseReady] = useState(isFirebaseConfigured());
   const demoSessionRef = useRef(false);
 
   const currentColors = isDarkMode ? COLORS_DARK : COLORS;
@@ -145,13 +146,17 @@ export default function App() {
     let unsubscribe = () => {};
 
     async function setupAuth() {
-      if (!isFirebaseConfigured()) {
-        const missingKeys = getMissingFirebaseConfigKeys();
-        setLoginError(`Firebase config missing: ${missingKeys.join(", ")}. Add these keys in .env and Vercel env.`);
+      const ready = await ensureFirebase();
+      if (!mounted) return;
+
+      if (!ready) {
+        setFirebaseReady(false);
         setIsAuthReady(true);
         setIsLoading(false);
         return;
       }
+
+      setFirebaseReady(true);
 
       try {
         await tryCompleteRedirectSignIn();
@@ -641,6 +646,7 @@ export default function App() {
             onDemoStart={handleDemoStart}
             isBusy={isLoggingIn}
             errorText={loginError}
+            firebaseReady={firebaseReady}
             colors={currentColors}
           />
         </LoginErrorBoundary>

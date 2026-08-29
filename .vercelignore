@@ -1,0 +1,7 @@
+node_modules
+.expo
+.git
+apply_firebase_fix.ps1
+garbh_firebase_vercel_fix.zip
+*.zip
+*.ps1
