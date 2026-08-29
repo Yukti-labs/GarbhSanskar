@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet,
   SafeAreaView, StatusBar, Platform, useWindowDimensions, ActivityIndicator,
@@ -16,8 +16,13 @@ import NamesScreen from "./src/screens/NamesScreen";
 import CareHubScreen from "./src/screens/CareHubScreen";
 import ProfileScreen from "./src/screens/ProfileScreen";
 import PregnancyChatScreen from "./src/screens/PregnancyChatScreen";
+import HealthLogScreen from "./src/screens/HealthLogScreen";
+import RitualScreen from "./src/screens/RitualScreen";
+import FamilyCareScreen from "./src/screens/FamilyCareScreen";
+import PostpartumTrackScreen from "./src/screens/PostpartumTrackScreen";
 import VercelAnalytics from "./src/components/VercelAnalytics";
 import { getDailyGeetaShlok } from "./src/services/claudeApi";
+import { getDefaultCareData, mergeCareData } from "./src/utils/careData";
 import {
   isFirebaseConfigured,
   getMissingFirebaseConfigKeys,
@@ -36,6 +41,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 const DARK_MODE_KEY = "garbh_dark_mode";
 const IS_WEB = Platform.OS === "web";
 const ONBOARDING_RELEASE_VERSION = 2;
+const DEMO_UID = "demo-local";
 const getProfileCacheKey = (uid) => `garbh_profile_${uid}`;
 const getNamesCacheKey = (uid) => `garbh_names_${uid}`;
 const getCareCacheKey = (uid) => `garbh_care_${uid}`;
@@ -81,26 +87,6 @@ class LoginErrorBoundary extends React.Component {
   }
 }
 
-function getDefaultCareData() {
-  return {
-    reminders: [
-      { id: "r1", title: "फॉलिक अॅसिड घ्या", time: "सकाळी ८:००", enabled: true },
-      { id: "r2", title: "पाणी प्या", time: "दुपारी १२:००", enabled: true },
-      { id: "r3", title: "१० मिनिटे चालणे", time: "सायंकाळी ६:००", enabled: true },
-    ],
-    moodLogs: [],
-    notificationMap: {},
-    hospitalBag: {
-      "ओळखपत्रे व कागदपत्रे": false,
-      "आरामदायी कपडे": false,
-      "बाळाचे कपडे": false,
-      "स्वच्छता साहित्य": false,
-      "डॉक्टरांचे अहवाल": false,
-      "मोबाइल चार्जर": false,
-    },
-  };
-}
-
 const NAV_TABS = [
   { id: "home", emoji: "🏠", label: "मुख्यपान", hint: "आजचा प्रवास" },
   { id: "weeks", emoji: "📅", label: "आठवडे", hint: "संपूर्ण टाइमलाइन" },
@@ -108,6 +94,19 @@ const NAV_TABS = [
   { id: "care", emoji: "🩺", label: "सहाय्य", hint: "दैनिक मदत" },
   { id: "profile", emoji: "👩", label: "प्रोफाइल", hint: "तुमची माहिती" },
 ];
+
+function stackScreenTitle(stackEntry) {
+  if (!stackEntry) return "";
+  if (stackEntry.screen === "weekDetail") return `आठवडा ${stackEntry.params?.week}`;
+  const titles = {
+    chatbot: "सल्ला चॅट",
+    healthLog: "आरोग्य नोंद",
+    ritual: "दैनिक संस्कार",
+    family: "कुटुंब",
+    postpartum: "प्रसूतीनंतर",
+  };
+  return titles[stackEntry.screen] || "";
+}
 
 export default function App() {
   const { width } = useWindowDimensions();
@@ -124,6 +123,7 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [needsReOnboarding, setNeedsReOnboarding] = useState(false);
   const [loginScreenKey, setLoginScreenKey] = useState(0);
+  const demoSessionRef = useRef(false);
 
   const currentColors = isDarkMode ? COLORS_DARK : COLORS;
   const isMobileWeb = IS_WEB && width < 900;
@@ -163,6 +163,7 @@ export default function App() {
 
       unsubscribe = observeAuth(async (user) => {
         if (!mounted) return;
+        if (demoSessionRef.current) return;
 
         setAuthUser(user);
 
@@ -196,7 +197,7 @@ export default function App() {
           if (cachedCareRaw) {
             const parsedCare = JSON.parse(cachedCareRaw);
             if (parsedCare && typeof parsedCare === "object") {
-              setCareData({ ...getDefaultCareData(), ...parsedCare });
+              setCareData(mergeCareData(parsedCare));
             }
           }
 
@@ -227,7 +228,7 @@ export default function App() {
           const mustOnboard = !cloudProfile || onboardingVersion < ONBOARDING_RELEASE_VERSION;
 
           setSavedNames(Array.isArray(cloud?.savedNames) ? cloud.savedNames : []);
-          setCareData(cloud?.careData ? { ...getDefaultCareData(), ...cloud.careData } : getDefaultCareData());
+          setCareData(cloud?.careData ? mergeCareData(cloud.careData) : getDefaultCareData());
 
           if (mustOnboard) {
             setProfile(null);
@@ -246,7 +247,7 @@ export default function App() {
             await Promise.all([
               AsyncStorage.setItem(getProfileCacheKey(user.uid), JSON.stringify(parsedProfile)),
               AsyncStorage.setItem(getNamesCacheKey(user.uid), JSON.stringify(Array.isArray(cloud?.savedNames) ? cloud.savedNames : [])),
-              AsyncStorage.setItem(getCareCacheKey(user.uid), JSON.stringify(cloud?.careData ? { ...getDefaultCareData(), ...cloud.careData } : getDefaultCareData())),
+              AsyncStorage.setItem(getCareCacheKey(user.uid), JSON.stringify(cloud?.careData ? mergeCareData(cloud.careData) : getDefaultCareData())),
             ]);
           }
         } catch (e) {
@@ -284,8 +285,15 @@ export default function App() {
     if (!authUser?.uid) return;
     try {
       const profileToSave = {
+        diet: "veg",
+        pregnancyType: "singleton",
+        healthFlags: [],
+        viewerRole: "mother",
+        plusUnlocked: false,
+        ...profile,
         ...newProfile,
         onboardingVersion: ONBOARDING_RELEASE_VERSION,
+        familyCode: newProfile.familyCode || profile?.familyCode || `GS${String(authUser.uid).slice(0, 6).toUpperCase()}`,
       };
       setProfile(profileToSave);
       setNeedsReOnboarding(false);
@@ -296,14 +304,16 @@ export default function App() {
         AsyncStorage.setItem(getCareCacheKey(authUser.uid), JSON.stringify(careData)),
       ]);
 
-      saveUserCloud(authUser.uid, {
-        profile: profileToSave,
-        savedNames,
-        careData,
-        onboardingVersion: ONBOARDING_RELEASE_VERSION,
-      }).catch((error) => {
-        console.error("Cloud save profile error", error);
-      });
+      if (authUser.uid !== DEMO_UID) {
+        saveUserCloud(authUser.uid, {
+          profile: profileToSave,
+          savedNames,
+          careData,
+          onboardingVersion: ONBOARDING_RELEASE_VERSION,
+        }).catch((error) => {
+          console.error("Cloud save profile error", error);
+        });
+      }
     } catch (e) {
       console.error("Save error", e);
     }
@@ -318,9 +328,11 @@ export default function App() {
         : [...savedNames, nameObj];
       setSavedNames(updated);
       await AsyncStorage.setItem(getNamesCacheKey(authUser.uid), JSON.stringify(updated));
-      saveUserCloud(authUser.uid, { savedNames: updated }).catch((error) => {
-        console.error("Cloud save name error", error);
-      });
+      if (authUser.uid !== DEMO_UID) {
+        saveUserCloud(authUser.uid, { savedNames: updated }).catch((error) => {
+          console.error("Cloud save name error", error);
+        });
+      }
     } catch (e) {
       console.error("Save name error", e);
     }
@@ -328,13 +340,15 @@ export default function App() {
 
   async function saveCareData(nextCareData) {
     if (!authUser?.uid) return;
-    const merged = { ...getDefaultCareData(), ...nextCareData };
+    const merged = mergeCareData(nextCareData);
     setCareData(merged);
     try {
       await AsyncStorage.setItem(getCareCacheKey(authUser.uid), JSON.stringify(merged));
-      saveUserCloud(authUser.uid, { careData: merged }).catch((error) => {
-        console.error("Cloud save care data error", error);
-      });
+      if (authUser.uid !== DEMO_UID) {
+        saveUserCloud(authUser.uid, { careData: merged }).catch((error) => {
+          console.error("Cloud save care data error", error);
+        });
+      }
     } catch (error) {
       console.error("Save care data error", error);
     }
@@ -354,6 +368,58 @@ export default function App() {
     }
   }
 
+  async function handleDemoStart() {
+    demoSessionRef.current = true;
+    setLoginError("");
+    setAuthUser({ uid: DEMO_UID, isDemo: true });
+    try {
+      const [cachedProfileRaw, cachedNamesRaw, cachedCareRaw] = await Promise.all([
+        AsyncStorage.getItem(getProfileCacheKey(DEMO_UID)),
+        AsyncStorage.getItem(getNamesCacheKey(DEMO_UID)),
+        AsyncStorage.getItem(getCareCacheKey(DEMO_UID)),
+      ]);
+      if (cachedNamesRaw) {
+        const parsedNames = JSON.parse(cachedNamesRaw);
+        if (Array.isArray(parsedNames)) setSavedNames(parsedNames);
+      }
+      if (cachedCareRaw) {
+        const parsedCare = JSON.parse(cachedCareRaw);
+        if (parsedCare && typeof parsedCare === "object") setCareData(mergeCareData(parsedCare));
+      } else {
+        setCareData(getDefaultCareData());
+      }
+      if (cachedProfileRaw) {
+        const cachedProfile = JSON.parse(cachedProfileRaw);
+        const cachedVersion = cachedProfile?.onboardingVersion || 0;
+        if (cachedVersion >= ONBOARDING_RELEASE_VERSION) {
+          const parsedCachedProfile = { ...cachedProfile };
+          if (parsedCachedProfile?.lmpDate) {
+            const diffMs = new Date() - new Date(parsedCachedProfile.lmpDate);
+            parsedCachedProfile.currentWeek = Math.max(
+              1,
+              Math.min(40, Math.floor(diffMs / (1000 * 60 * 60 * 24 * 7)) + 1)
+            );
+          }
+          setProfile(parsedCachedProfile);
+          setNeedsReOnboarding(false);
+        } else {
+          setProfile(null);
+          setNeedsReOnboarding(true);
+        }
+      } else {
+        setProfile(null);
+        setNeedsReOnboarding(true);
+      }
+    } catch (e) {
+      console.error("Demo load error", e);
+      setProfile(null);
+      setNeedsReOnboarding(true);
+    } finally {
+      setIsAuthReady(true);
+      setIsLoading(false);
+    }
+  }
+
   async function handleGoogleLogin(nativeGoogleTokens = null) {
     setLoginError("");
     setIsLoggingIn(true);
@@ -367,11 +433,22 @@ export default function App() {
   }
 
   async function handleSignOut() {
-    // Show loading screen immediately so there's no blank white gap
+    const wasDemo = authUser?.uid === DEMO_UID;
+    demoSessionRef.current = false;
     setIsLoading(true);
+    if (wasDemo) {
+      setProfile(null);
+      setSavedNames([]);
+      setCareData(getDefaultCareData());
+      setNavigationStack([]);
+      setActiveTab("home");
+      setNeedsReOnboarding(false);
+      setAuthUser(null);
+      setIsLoading(false);
+      return;
+    }
     try {
       await signOutUser();
-      // Auth observer will fire with user=null and clear state + set isLoading false
     } catch (e) {
       console.error("Sign out error", e);
       // On error, manually restore a clean logged-out state
@@ -404,6 +481,7 @@ export default function App() {
       return (
         <HomeScreen
           profile={profile}
+          careData={careData}
           onNavigate={navigate}
           onGoToTab={handleTabPress}
           colors={currentColors}
@@ -443,6 +521,7 @@ export default function App() {
           careData={careData}
           onSaveCareData={saveCareData}
           onUpdateProfile={saveProfile}
+          onNavigate={navigate}
           colors={currentColors}
         />
       );
@@ -465,6 +544,7 @@ export default function App() {
         <WeekDetailScreen
           week={stackEntry.params.week}
           initialTab={stackEntry.params.tab || "baby"}
+          profile={profile}
           colors={currentColors}
           isDarkMode={isDarkMode}
           isMobileWeb={isMobileWeb}
@@ -475,8 +555,56 @@ export default function App() {
       return (
         <PregnancyChatScreen
           profile={profile}
+          careData={careData}
+          onSaveCareData={saveCareData}
+          onUnlockPlus={() => saveProfile({ ...profile, plusUnlocked: true })}
           colors={currentColors}
           isMobileWeb={isMobileWeb}
+        />
+      );
+    }
+    if (stackEntry?.screen === "healthLog") {
+      return (
+        <HealthLogScreen
+          profile={profile}
+          careData={careData}
+          onSaveCareData={saveCareData}
+          onUnlockPlus={() => saveProfile({ ...profile, plusUnlocked: true })}
+          colors={currentColors}
+        />
+      );
+    }
+    if (stackEntry?.screen === "ritual") {
+      return (
+        <RitualScreen
+          profile={profile}
+          careData={careData}
+          onSaveCareData={saveCareData}
+          onUnlockPlus={() => saveProfile({ ...profile, plusUnlocked: true })}
+          colors={currentColors}
+        />
+      );
+    }
+    if (stackEntry?.screen === "family") {
+      return (
+        <FamilyCareScreen
+          profile={profile}
+          careData={careData}
+          onSaveCareData={saveCareData}
+          onUpdateProfile={saveProfile}
+          onUnlockPlus={() => saveProfile({ ...profile, plusUnlocked: true })}
+          colors={currentColors}
+        />
+      );
+    }
+    if (stackEntry?.screen === "postpartum") {
+      return (
+        <PostpartumTrackScreen
+          profile={profile}
+          careData={careData}
+          onSaveCareData={saveCareData}
+          onUpdateProfile={saveProfile}
+          colors={currentColors}
         />
       );
     }
@@ -510,6 +638,7 @@ export default function App() {
         >
           <LoginScreen
             onGoogleSignIn={handleGoogleLogin}
+            onDemoStart={handleDemoStart}
             isBusy={isLoggingIn}
             errorText={loginError}
             colors={currentColors}
@@ -535,7 +664,7 @@ export default function App() {
               <View style={styles.webOnboardingList}>
                 <Text style={styles.webOnboardingListItem}>• आठवड्यानुसार मार्गदर्शन</Text>
                 <Text style={styles.webOnboardingListItem}>• नावे, संस्कार, योग, पोषण</Text>
-                <Text style={styles.webOnboardingListItem}>• दैनिक गीता श्लोक आणि गर्भ गीता संदर्भ</Text>
+                <Text style={styles.webOnboardingListItem}>• नोंदवही, दैनिक विधी, कुटुंब आणि प्रसूतीनंतर ट्रॅक</Text>
                 <Text style={styles.webOnboardingListItem}>• Google साइन-इन आणि क्लाउड डेटा सिंक</Text>
               </View>
             </View>
@@ -611,14 +740,10 @@ export default function App() {
               <View style={styles.webTopBar}>
                 <View>
                   <Text style={styles.webEyebrow}>
-                    {currentStack ? "आठवड्याचे मार्गदर्शन" : "डॅशबोर्ड"}
+                    {currentStack ? "सविस्तर" : "डॅशबोर्ड"}
                   </Text>
                   <Text style={styles.webPageTitle}>
-                    {currentStack
-                      ? currentStack.screen === "weekDetail"
-                        ? `आठवडा ${currentStack.params.week}`
-                        : "सल्ला चॅट"
-                      : activeTabMeta?.label}
+                    {currentStack ? stackScreenTitle(currentStack) : activeTabMeta?.label}
                   </Text>
                 </View>
 
@@ -656,11 +781,7 @@ export default function App() {
             <Text style={[styles.backBtnText, { color: currentColors.primary }]}>← मागे</Text>
           </TouchableOpacity>
           <Text style={[styles.stackTitle, { color: currentColors.textPrimary }]}>
-            {currentStack.screen === "weekDetail"
-              ? `आठवडा ${currentStack.params.week}`
-              : currentStack.screen === "chatbot"
-                ? "सल्ला चॅट"
-                : ""}
+            {stackScreenTitle(currentStack)}
           </Text>
           <TouchableOpacity style={styles.mobileDarkToggle} onPress={toggleDarkMode}>
             <Text style={styles.darkModeIcon}>{isDarkMode ? "🌞" : "🌙"}</Text>

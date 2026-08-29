@@ -103,7 +103,7 @@ function साथीदार_सूचना(week, postpartumMode) {
   ];
 }
 
-export default function CareHubScreen({ profile, careData, onSaveCareData, onUpdateProfile, colors = COLORS }) {
+export default function CareHubScreen({ profile, careData, onSaveCareData, onUpdateProfile, onNavigate, colors = COLORS }) {
   const [selectedMood, setSelectedMood] = useState(भावना_पर्याय[0]);
   const [selectedSymptoms, setSelectedSymptoms] = useState([]);
 
@@ -227,6 +227,26 @@ export default function CareHubScreen({ profile, careData, onSaveCareData, onUpd
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.bg }]} showsVerticalScrollIndicator={false}>
+      <SectionCard>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>⭐ प्रीमियम सहाय्य</Text>
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.bgWarm }]} onPress={() => onNavigate?.("healthLog")}>
+            <Text style={[styles.actionText, { color: colors.primaryDark }]}>📒 नोंदवही</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.bgTeal }]} onPress={() => onNavigate?.("ritual")}>
+            <Text style={[styles.actionText, { color: colors.accent }]}>🕉️ विधी</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#EEE8FF" }]} onPress={() => onNavigate?.("family")}>
+            <Text style={[styles.actionText, { color: colors.primary }]}>🤝 कुटुंब</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.bgWarm }]} onPress={() => onNavigate?.("postpartum")}>
+            <Text style={[styles.actionText, { color: colors.primaryDark }]}>👩‍🍼 ०-१२ आठवडे</Text>
+          </TouchableOpacity>
+        </View>
+      </SectionCard>
+
       <SectionCard>
         <Text style={[styles.title, { color: colors.textPrimary }]}>🧭 आजची वैयक्तिक योजना</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>आठवडा {currentWeek} • {postpartumMode ? "प्रसूतीनंतर मोड" : आठवडा_टप्पा(currentWeek)}</Text>

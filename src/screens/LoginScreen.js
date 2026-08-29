@@ -6,13 +6,14 @@ import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from "../constants/theme";
 
 WebBrowser.maybeCompleteAuthSession();
 
-export default function LoginScreen({ onGoogleSignIn, colors = COLORS, errorText = "", isBusy = false }) {
+export default function LoginScreen({ onGoogleSignIn, onDemoStart, colors = COLORS, errorText = "", isBusy = false }) {
   const isWeb = Platform.OS === "web";
 
   if (isWeb) {
     return (
       <WebLogin
         onGoogleSignIn={onGoogleSignIn}
+        onDemoStart={onDemoStart}
         colors={colors}
         errorText={errorText}
         isBusy={isBusy}
@@ -23,6 +24,7 @@ export default function LoginScreen({ onGoogleSignIn, colors = COLORS, errorText
   return (
     <NativeLogin
       onGoogleSignIn={onGoogleSignIn}
+      onDemoStart={onDemoStart}
       colors={colors}
       errorText={errorText}
       isBusy={isBusy}
@@ -30,7 +32,7 @@ export default function LoginScreen({ onGoogleSignIn, colors = COLORS, errorText
   );
 }
 
-function WebLogin({ onGoogleSignIn, colors, errorText, isBusy }) {
+function WebLogin({ onGoogleSignIn, onDemoStart, colors, errorText, isBusy }) {
   const [localError, setLocalError] = useState("");
 
   async function handleLogin() {
@@ -47,13 +49,14 @@ function WebLogin({ onGoogleSignIn, colors, errorText, isBusy }) {
     isBusy,
     buttonLabel: isBusy ? "कृपया थांबा..." : "Google ने सुरू करा",
     onPress: handleLogin,
+    onDemoStart,
     errorText,
     localError,
     showNativeNote: false,
   });
 }
 
-function NativeLogin({ onGoogleSignIn, colors, errorText, isBusy }) {
+function NativeLogin({ onGoogleSignIn, onDemoStart, colors, errorText, isBusy }) {
   const [localError, setLocalError] = useState("");
 
   const [request, response, promptAsync] = Google.useAuthRequest({
@@ -105,6 +108,7 @@ function NativeLogin({ onGoogleSignIn, colors, errorText, isBusy }) {
     isBusy,
     buttonLabel: isBusy ? "कृपया थांबा..." : "Google ने सुरू करा",
     onPress: handleLogin,
+    onDemoStart,
     errorText,
     localError,
     showNativeNote: true,
@@ -116,6 +120,7 @@ function renderLoginCard({
   isBusy,
   buttonLabel,
   onPress,
+  onDemoStart,
   errorText,
   localError,
   showNativeNote,
@@ -134,6 +139,16 @@ function renderLoginCard({
         >
           <Text style={styles.googleBtnText}>{buttonLabel}</Text>
         </TouchableOpacity>
+
+        {!!onDemoStart && (
+          <TouchableOpacity
+            style={[styles.demoBtn, { borderColor: colors.borderLight, backgroundColor: colors.bgWarm }]}
+            onPress={onDemoStart}
+            disabled={isBusy}
+          >
+            <Text style={[styles.demoBtnText, { color: colors.textPrimary }]}>डेमो पहा (लॉगिनशिवाय)</Text>
+          </TouchableOpacity>
+        )}
 
         {showNativeNote && (
           <Text style={[styles.note, { color: colors.textSecondary }]}>टीप: iOS/Android साठी Google Client IDs आवश्यक आहेत.</Text>
@@ -187,6 +202,17 @@ const styles = StyleSheet.create({
   },
   googleBtnDisabled: {
     opacity: 0.7,
+  },
+  demoBtn: {
+    marginTop: SPACING.md,
+    borderRadius: RADIUS.full,
+    paddingVertical: SPACING.md,
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  demoBtnText: {
+    fontSize: FONTS.body,
+    fontWeight: "800",
   },
   googleBtnText: {
     color: COLORS.textWhite,
