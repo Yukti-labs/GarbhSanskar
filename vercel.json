@@ -8,10 +8,6 @@
     {
       "source": "/__/auth/(.*)",
       "destination": "https://garbhsanskar-aca16.firebaseapp.com/__/auth/$1"
-    },
-    {
-      "source": "/((?!api/|_expo/|firebase-config\\.json).*)",
-      "destination": "/index.html"
     }
   ]
 }
