@@ -40,17 +40,17 @@ EXPO_PUBLIC_API_BASE_URL=https://your-app.vercel.app
 GEMINI_API_KEY=your_gemini_api_key_here
 OPENAI_API_KEY=your_openai_api_key_here
 GROK_API_KEY=your_grok_api_key_here
-EXPO_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
-EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+EXPO_PUBLIC_FIREBASE_API_KEY=your_firebase_web_api_key
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=garbhsanskar-aca16.firebaseapp.com
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=garbhsanskar-aca16
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=garbhsanskar-aca16.appspot.com
 EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 EXPO_PUBLIC_FIREBASE_APP_ID=your_firebase_app_id
 ```
 
-AI provider keys are read by the backend API endpoint (`/api/content`), not by the mobile/web client.
+Copy the **apiKey**, **appId**, and **messagingSenderId** from Firebase Console → Project settings → Your apps (Web). Do not invent them.
 
-The backend uses Gemini first and automatically falls back to OpenAI/Grok on supported failures.
+On Vercel: Project → Settings → Environment Variables. Add the same `EXPO_PUBLIC_FIREBASE_*` names for Production, Preview, and Development, then **Redeploy**. Expo bakes these into the web bundle at `expo export` time; changing Vercel env without a new deploy will not update login.
 
 Google login and cross-device user data sync use Firebase Auth + Firestore.
 
