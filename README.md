@@ -52,7 +52,9 @@ Copy the **apiKey**, **appId**, and **messagingSenderId** from Firebase Console 
 
 Expo web **does not read Vercel env at click-time** unless they were present during `expo export`, or the app loads `/api/public-config` (this project now does that on login). Name the variables `EXPO_PUBLIC_FIREBASE_*` **or** `FIREBASE_API_KEY` / `FIREBASE_APP_ID` / `FIREBASE_PROJECT_ID` / `FIREBASE_AUTH_DOMAIN`. Then **Redeploy**.
 
-On Vercel: Project → Settings → Environment Variables for Production, Preview, and Development.
+On Vercel: Project → Settings → Environment Variables for Production, Preview, and Development, then **Redeploy**.
+
+After deploy, open `https://your-app.vercel.app/firebase-config.json` — you should see JSON with `"configured": true`. If you open `/api/public-config` and get the login page instead of JSON, a catch-all rewrite is sending API URLs to the SPA (fixed in vercel.json).
 
 Google login and cross-device user data sync use Firebase Auth + Firestore.
 

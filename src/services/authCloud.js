@@ -32,27 +32,41 @@ function isComplete(config) {
   return !!(config?.apiKey && config?.authDomain && config?.projectId && config?.appId);
 }
 
-function getPublicConfigUrl() {
-  const base = (process.env.EXPO_PUBLIC_API_BASE_URL || "").replace(/\/$/, "");
-  if (base) return `${base}/api/public-config`;
+function collectConfigUrls() {
+  const urls = [];
   if (typeof window !== "undefined" && window.location?.origin) {
-    return `${window.location.origin}/api/public-config`;
+    urls.push(`${window.location.origin}/firebase-config.json`);
+    urls.push(`${window.location.origin}/api/public-config`);
   }
-  return "";
+  const base = (process.env.EXPO_PUBLIC_API_BASE_URL || "").replace(/\/$/, "");
+  if (base) {
+    urls.push(`${base}/firebase-config.json`);
+    urls.push(`${base}/api/public-config`);
+  }
+  return [...new Set(urls)];
+}
+
+async function fetchJsonConfig(url) {
+  const response = await fetch(url, { method: "GET", cache: "no-store" });
+  if (!response.ok) return {};
+  const text = await response.text();
+  const trimmed = String(text || "").trim();
+  if (!trimmed || trimmed.startsWith("<")) return {};
+  const data = JSON.parse(trimmed);
+  return data?.firebase && typeof data.firebase === "object" ? data.firebase : {};
 }
 
 async function fetchRuntimeFirebaseConfig() {
-  const url = getPublicConfigUrl();
-  if (!url) return {};
-  try {
-    const response = await fetch(url, { method: "GET", cache: "no-store" });
-    if (!response.ok) return {};
-    const data = await response.json();
-    return data?.firebase && typeof data.firebase === "object" ? data.firebase : {};
-  } catch (error) {
-    console.error("Firebase public-config fetch error", error);
-    return {};
+  const urls = collectConfigUrls();
+  for (const url of urls) {
+    try {
+      const firebase = await fetchJsonConfig(url);
+      if (isComplete(firebase)) return firebase;
+    } catch (error) {
+      console.error("Firebase config fetch error", url, error);
+    }
   }
+  return {};
 }
 
 let app;
