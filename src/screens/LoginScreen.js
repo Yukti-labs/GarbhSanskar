@@ -168,7 +168,7 @@ function renderLoginCard({
 
         {!firebaseReady && (
           <Text style={[styles.note, { color: colors.textSecondary }]}>
-            .env आणि Vercel Environment Variables मध्ये EXPO_PUBLIC_FIREBASE_API_KEY, AUTH_DOMAIN, PROJECT_ID, APP_ID भरा. नंतर web rebuild/redeploy करा.
+            Google साइन-इन नंतर Firebase keys Vercel वर जोडल्या की सुरू होईल. आत्ता डेमोने पूर्ण अॅप वापरता येते.
           </Text>
         )}
 
