@@ -1,13 +1,17 @@
 const appJson = require("./app.json");
+const { readFirebaseConfigFromEnv } = require("./lib/firebaseEnv.cjs");
 
-module.exports = () => ({
-  ...appJson.expo,
-  extra: {
-    firebaseApiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "",
-    firebaseAuthDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
-    firebaseProjectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "",
-    firebaseStorageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
-    firebaseMessagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
-    firebaseAppId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "",
-  },
-});
+module.exports = () => {
+  const firebase = readFirebaseConfigFromEnv(process.env);
+  return {
+    ...appJson.expo,
+    extra: {
+      firebaseApiKey: firebase.apiKey,
+      firebaseAuthDomain: firebase.authDomain,
+      firebaseProjectId: firebase.projectId,
+      firebaseStorageBucket: firebase.storageBucket,
+      firebaseMessagingSenderId: firebase.messagingSenderId,
+      firebaseAppId: firebase.appId,
+    },
+  };
+};

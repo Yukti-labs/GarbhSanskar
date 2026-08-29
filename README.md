@@ -48,9 +48,11 @@ EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 EXPO_PUBLIC_FIREBASE_APP_ID=your_firebase_app_id
 ```
 
-Copy the **apiKey**, **appId**, and **messagingSenderId** from Firebase Console → Project settings → Your apps (Web). Do not invent them.
+Copy the **apiKey**, **appId**, and **messagingSenderId** from Firebase Console → Project settings → Your apps (Web).
 
-On Vercel: Project → Settings → Environment Variables. Add the same `EXPO_PUBLIC_FIREBASE_*` names for Production, Preview, and Development, then **Redeploy**. Expo bakes these into the web bundle at `expo export` time; changing Vercel env without a new deploy will not update login.
+Expo web **does not read Vercel env at click-time** unless they were present during `expo export`, or the app loads `/api/public-config` (this project now does that on login). Name the variables `EXPO_PUBLIC_FIREBASE_*` **or** `FIREBASE_API_KEY` / `FIREBASE_APP_ID` / `FIREBASE_PROJECT_ID` / `FIREBASE_AUTH_DOMAIN`. Then **Redeploy**.
+
+On Vercel: Project → Settings → Environment Variables for Production, Preview, and Development.
 
 Google login and cross-device user data sync use Firebase Auth + Firestore.
 

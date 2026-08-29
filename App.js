@@ -25,6 +25,7 @@ import { getDailyGeetaShlok } from "./src/services/claudeApi";
 import { getDefaultCareData, mergeCareData } from "./src/utils/careData";
 import {
   isFirebaseConfigured,
+  ensureFirebase,
   observeAuth,
   signInWithGoogle,
   loadUserCloud,
@@ -145,7 +146,10 @@ export default function App() {
     let unsubscribe = () => {};
 
     async function setupAuth() {
-      if (!isFirebaseConfigured()) {
+      const ready = await ensureFirebase();
+      if (!mounted) return;
+
+      if (!ready) {
         setFirebaseReady(false);
         setIsAuthReady(true);
         setIsLoading(false);

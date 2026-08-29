@@ -17,51 +17,77 @@ import Constants from "expo-constants";
 
 const extra = Constants.expoConfig?.extra || {};
 
-function readFirebaseEnv(publicName, extraName) {
-  return String(process.env[publicName] || extra[extraName] || "").trim();
+function fromExtra() {
+  return {
+    apiKey: String(extra.firebaseApiKey || process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "").trim(),
+    authDomain: String(extra.firebaseAuthDomain || process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "").trim(),
+    projectId: String(extra.firebaseProjectId || process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "").trim(),
+    storageBucket: String(extra.firebaseStorageBucket || process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "").trim(),
+    messagingSenderId: String(extra.firebaseMessagingSenderId || process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "").trim(),
+    appId: String(extra.firebaseAppId || process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "").trim(),
+  };
 }
 
-const firebaseConfig = {
-  apiKey: readFirebaseEnv("EXPO_PUBLIC_FIREBASE_API_KEY", "firebaseApiKey"),
-  authDomain: readFirebaseEnv("EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN", "firebaseAuthDomain"),
-  projectId: readFirebaseEnv("EXPO_PUBLIC_FIREBASE_PROJECT_ID", "firebaseProjectId"),
-  storageBucket: readFirebaseEnv("EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET", "firebaseStorageBucket"),
-  messagingSenderId: readFirebaseEnv("EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID", "firebaseMessagingSenderId"),
-  appId: readFirebaseEnv("EXPO_PUBLIC_FIREBASE_APP_ID", "firebaseAppId"),
-};
+function isComplete(config) {
+  return !!(config?.apiKey && config?.authDomain && config?.projectId && config?.appId);
+}
 
-const REQUIRED_FIREBASE_KEYS = [
-  { env: "EXPO_PUBLIC_FIREBASE_API_KEY", extra: "firebaseApiKey" },
-  { env: "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN", extra: "firebaseAuthDomain" },
-  { env: "EXPO_PUBLIC_FIREBASE_PROJECT_ID", extra: "firebaseProjectId" },
-  { env: "EXPO_PUBLIC_FIREBASE_APP_ID", extra: "firebaseAppId" },
-];
+function getPublicConfigUrl() {
+  const base = (process.env.EXPO_PUBLIC_API_BASE_URL || "").replace(/\/$/, "");
+  if (base) return `${base}/api/public-config`;
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}/api/public-config`;
+  }
+  return "";
+}
 
-const hasConfig = !!(
-  firebaseConfig.apiKey
-  && firebaseConfig.authDomain
-  && firebaseConfig.projectId
-  && firebaseConfig.appId
-);
+async function fetchRuntimeFirebaseConfig() {
+  const url = getPublicConfigUrl();
+  if (!url) return {};
+  try {
+    const response = await fetch(url, { method: "GET", cache: "no-store" });
+    if (!response.ok) return {};
+    const data = await response.json();
+    return data?.firebase && typeof data.firebase === "object" ? data.firebase : {};
+  } catch (error) {
+    console.error("Firebase public-config fetch error", error);
+    return {};
+  }
+}
 
 let app;
 let auth;
 let db;
+let initPromise;
 
-if (hasConfig) {
-  app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
+export async function ensureFirebase() {
+  if (auth) return true;
+  if (!initPromise) {
+    initPromise = (async () => {
+      const merged = { ...fromExtra(), ...(await fetchRuntimeFirebaseConfig()) };
+      if (!isComplete(merged)) return false;
+      app = getApps().length ? getApp() : initializeApp(merged);
+      auth = getAuth(app);
+      db = getFirestore(app);
+      return true;
+    })();
+  }
+  return initPromise;
 }
 
 export function isFirebaseConfigured() {
-  return hasConfig;
+  return isComplete(fromExtra()) || !!auth;
 }
 
 export function getMissingFirebaseConfigKeys() {
-  return REQUIRED_FIREBASE_KEYS
-    .filter((item) => !readFirebaseEnv(item.env, item.extra))
-    .map((item) => item.env);
+  const config = fromExtra();
+  const mapping = {
+    EXPO_PUBLIC_FIREBASE_API_KEY: config.apiKey,
+    EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: config.authDomain,
+    EXPO_PUBLIC_FIREBASE_PROJECT_ID: config.projectId,
+    EXPO_PUBLIC_FIREBASE_APP_ID: config.appId,
+  };
+  return Object.keys(mapping).filter((key) => !mapping[key]);
 }
 
 export function observeAuth(handler) {
@@ -73,7 +99,8 @@ export function observeAuth(handler) {
 }
 
 export async function tryCompleteRedirectSignIn() {
-  if (!auth || Platform.OS !== "web") return null;
+  const ready = await ensureFirebase();
+  if (!ready || !auth || Platform.OS !== "web") return null;
   try {
     return await getRedirectResult(auth);
   } catch (error) {
@@ -137,7 +164,8 @@ function isIOSSafari() {
 }
 
 export async function signInWithGoogle(nativeGoogleTokens = null) {
-  if (!auth) throw new Error("Firebase config missing");
+  const ready = await ensureFirebase();
+  if (!ready || !auth) throw new Error("Firebase config missing");
 
   if (Platform.OS !== "web") {
     const idToken = nativeGoogleTokens?.idToken;
@@ -181,6 +209,7 @@ export async function signInWithGoogle(nativeGoogleTokens = null) {
 }
 
 export async function signOutUser() {
+  await ensureFirebase();
   if (!auth) return;
   await signOut(auth);
 }
@@ -190,14 +219,16 @@ function getUserDocRef(uid) {
 }
 
 export async function loadUserCloud(uid) {
-  if (!db || !uid) return null;
+  const ready = await ensureFirebase();
+  if (!ready || !db || !uid) return null;
   const snapshot = await getDoc(getUserDocRef(uid));
   if (!snapshot.exists()) return null;
   return snapshot.data();
 }
 
 export async function saveUserCloud(uid, payload) {
-  if (!db || !uid) return;
+  const ready = await ensureFirebase();
+  if (!ready || !db || !uid) return;
   await setDoc(
     getUserDocRef(uid),
     {
