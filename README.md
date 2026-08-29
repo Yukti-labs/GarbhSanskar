@@ -43,7 +43,7 @@ GROK_API_KEY=your_grok_api_key_here
 EXPO_PUBLIC_FIREBASE_API_KEY=your_firebase_web_api_key
 EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=garbhsanskar-aca16.firebaseapp.com
 EXPO_PUBLIC_FIREBASE_PROJECT_ID=garbhsanskar-aca16
-EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=garbhsanskar-aca16.appspot.com
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=garbhsanskar-aca16.firebasestorage.app
 EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 EXPO_PUBLIC_FIREBASE_APP_ID=your_firebase_app_id
 ```
