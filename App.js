@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet,
   SafeAreaView, StatusBar, Platform, useWindowDimensions, ActivityIndicator,
@@ -41,6 +41,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 const DARK_MODE_KEY = "garbh_dark_mode";
 const IS_WEB = Platform.OS === "web";
 const ONBOARDING_RELEASE_VERSION = 2;
+const DEMO_UID = "demo-local";
 const getProfileCacheKey = (uid) => `garbh_profile_${uid}`;
 const getNamesCacheKey = (uid) => `garbh_names_${uid}`;
 const getCareCacheKey = (uid) => `garbh_care_${uid}`;
@@ -122,6 +123,7 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [needsReOnboarding, setNeedsReOnboarding] = useState(false);
   const [loginScreenKey, setLoginScreenKey] = useState(0);
+  const demoSessionRef = useRef(false);
 
   const currentColors = isDarkMode ? COLORS_DARK : COLORS;
   const isMobileWeb = IS_WEB && width < 900;
@@ -161,6 +163,7 @@ export default function App() {
 
       unsubscribe = observeAuth(async (user) => {
         if (!mounted) return;
+        if (demoSessionRef.current) return;
 
         setAuthUser(user);
 
@@ -301,14 +304,16 @@ export default function App() {
         AsyncStorage.setItem(getCareCacheKey(authUser.uid), JSON.stringify(careData)),
       ]);
 
-      saveUserCloud(authUser.uid, {
-        profile: profileToSave,
-        savedNames,
-        careData,
-        onboardingVersion: ONBOARDING_RELEASE_VERSION,
-      }).catch((error) => {
-        console.error("Cloud save profile error", error);
-      });
+      if (authUser.uid !== DEMO_UID) {
+        saveUserCloud(authUser.uid, {
+          profile: profileToSave,
+          savedNames,
+          careData,
+          onboardingVersion: ONBOARDING_RELEASE_VERSION,
+        }).catch((error) => {
+          console.error("Cloud save profile error", error);
+        });
+      }
     } catch (e) {
       console.error("Save error", e);
     }
@@ -323,9 +328,11 @@ export default function App() {
         : [...savedNames, nameObj];
       setSavedNames(updated);
       await AsyncStorage.setItem(getNamesCacheKey(authUser.uid), JSON.stringify(updated));
-      saveUserCloud(authUser.uid, { savedNames: updated }).catch((error) => {
-        console.error("Cloud save name error", error);
-      });
+      if (authUser.uid !== DEMO_UID) {
+        saveUserCloud(authUser.uid, { savedNames: updated }).catch((error) => {
+          console.error("Cloud save name error", error);
+        });
+      }
     } catch (e) {
       console.error("Save name error", e);
     }
@@ -337,9 +344,11 @@ export default function App() {
     setCareData(merged);
     try {
       await AsyncStorage.setItem(getCareCacheKey(authUser.uid), JSON.stringify(merged));
-      saveUserCloud(authUser.uid, { careData: merged }).catch((error) => {
-        console.error("Cloud save care data error", error);
-      });
+      if (authUser.uid !== DEMO_UID) {
+        saveUserCloud(authUser.uid, { careData: merged }).catch((error) => {
+          console.error("Cloud save care data error", error);
+        });
+      }
     } catch (error) {
       console.error("Save care data error", error);
     }
@@ -359,6 +368,58 @@ export default function App() {
     }
   }
 
+  async function handleDemoStart() {
+    demoSessionRef.current = true;
+    setLoginError("");
+    setAuthUser({ uid: DEMO_UID, isDemo: true });
+    try {
+      const [cachedProfileRaw, cachedNamesRaw, cachedCareRaw] = await Promise.all([
+        AsyncStorage.getItem(getProfileCacheKey(DEMO_UID)),
+        AsyncStorage.getItem(getNamesCacheKey(DEMO_UID)),
+        AsyncStorage.getItem(getCareCacheKey(DEMO_UID)),
+      ]);
+      if (cachedNamesRaw) {
+        const parsedNames = JSON.parse(cachedNamesRaw);
+        if (Array.isArray(parsedNames)) setSavedNames(parsedNames);
+      }
+      if (cachedCareRaw) {
+        const parsedCare = JSON.parse(cachedCareRaw);
+        if (parsedCare && typeof parsedCare === "object") setCareData(mergeCareData(parsedCare));
+      } else {
+        setCareData(getDefaultCareData());
+      }
+      if (cachedProfileRaw) {
+        const cachedProfile = JSON.parse(cachedProfileRaw);
+        const cachedVersion = cachedProfile?.onboardingVersion || 0;
+        if (cachedVersion >= ONBOARDING_RELEASE_VERSION) {
+          const parsedCachedProfile = { ...cachedProfile };
+          if (parsedCachedProfile?.lmpDate) {
+            const diffMs = new Date() - new Date(parsedCachedProfile.lmpDate);
+            parsedCachedProfile.currentWeek = Math.max(
+              1,
+              Math.min(40, Math.floor(diffMs / (1000 * 60 * 60 * 24 * 7)) + 1)
+            );
+          }
+          setProfile(parsedCachedProfile);
+          setNeedsReOnboarding(false);
+        } else {
+          setProfile(null);
+          setNeedsReOnboarding(true);
+        }
+      } else {
+        setProfile(null);
+        setNeedsReOnboarding(true);
+      }
+    } catch (e) {
+      console.error("Demo load error", e);
+      setProfile(null);
+      setNeedsReOnboarding(true);
+    } finally {
+      setIsAuthReady(true);
+      setIsLoading(false);
+    }
+  }
+
   async function handleGoogleLogin(nativeGoogleTokens = null) {
     setLoginError("");
     setIsLoggingIn(true);
@@ -372,11 +433,22 @@ export default function App() {
   }
 
   async function handleSignOut() {
-    // Show loading screen immediately so there's no blank white gap
+    const wasDemo = authUser?.uid === DEMO_UID;
+    demoSessionRef.current = false;
     setIsLoading(true);
+    if (wasDemo) {
+      setProfile(null);
+      setSavedNames([]);
+      setCareData(getDefaultCareData());
+      setNavigationStack([]);
+      setActiveTab("home");
+      setNeedsReOnboarding(false);
+      setAuthUser(null);
+      setIsLoading(false);
+      return;
+    }
     try {
       await signOutUser();
-      // Auth observer will fire with user=null and clear state + set isLoading false
     } catch (e) {
       console.error("Sign out error", e);
       // On error, manually restore a clean logged-out state
@@ -566,6 +638,7 @@ export default function App() {
         >
           <LoginScreen
             onGoogleSignIn={handleGoogleLogin}
+            onDemoStart={handleDemoStart}
             isBusy={isLoggingIn}
             errorText={loginError}
             colors={currentColors}
