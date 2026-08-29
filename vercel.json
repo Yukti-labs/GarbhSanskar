@@ -4,6 +4,15 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build:web",
   "outputDirectory": "dist",
+  "headers": [
+    {
+      "source": "/firebase-config.json",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" },
+        { "key": "Content-Type", "value": "application/json; charset=utf-8" }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/__/auth/(.*)",
